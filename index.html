@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>FireHistory Atlas</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Source+Sans+3:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css">
+<style>
+:root{--ink:#17233b;--paper:#f5f6f3;--card:#fff;--line:#d5d9d2;--muted:#56606f;--modis:#b45309;--viirs:#0f766e;--sel:#c2410c}
+*{box-sizing:border-box}
+body{margin:0;background:var(--paper);color:var(--ink);font:400 17px/1.55 "Source Sans 3",system-ui,sans-serif}
+h1,h2,h3{font-family:"Space Grotesk",system-ui,sans-serif;line-height:1.15;margin:0}
+h1{font-size:2.4rem;font-weight:700}
+h2{font-size:1.5rem;font-weight:700;margin-bottom:.4rem}
+h3{font-size:1.1rem;font-weight:500;margin:1.2rem 0 .3rem}
+p{margin:.3rem 0 .8rem;max-width:70ch}
+header{padding:2rem 1.25rem 1.2rem;max-width:1180px;margin:0 auto}
+header p{color:var(--muted);font-size:1.05rem}
+.notice{position:sticky;top:0;z-index:2000;background:var(--ink);color:#fff;padding:.55rem 1.25rem;font-size:.95rem;text-align:center}
+main{max-width:1180px;margin:0 auto;padding:0 1.25rem 3rem}
+section{margin-top:2rem}
+.panel{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:1.1rem 1.2rem}
+.controls{display:flex;flex-wrap:wrap;gap:1.2rem 2rem;margin-bottom:.9rem}
+fieldset{border:0;padding:0;margin:0}
+legend{font-weight:600;font-size:.95rem;padding:0;margin-bottom:.25rem}
+.opt{display:inline-flex;align-items:center;gap:.35rem;margin-right:1rem;cursor:pointer}
+.years button{font:inherit;border:1px solid var(--line);background:#fff;color:var(--ink);padding:.2rem .7rem;border-radius:6px;cursor:pointer;margin-right:.3rem}
+.years button[aria-pressed=true]{background:var(--ink);color:#fff;border-color:var(--ink)}
+button:focus-visible,input:focus-visible,.ep:focus-visible{outline:3px solid var(--sel);outline-offset:2px}
+.scroll{overflow-x:auto;padding-bottom:.3rem}
+.cal text{font-size:11px;fill:var(--muted)}
+.cal rect{cursor:pointer}
+.legend{display:flex;flex-wrap:wrap;align-items:center;gap:.4rem;font-size:.9rem;color:var(--muted);margin-top:.6rem}
+.sw{width:14px;height:14px;border-radius:2px;display:inline-block;border:1px solid #0001}
+#detail{margin-top:.8rem;padding:.7rem .9rem;background:var(--paper);border-radius:8px;min-height:3.4rem}
+.cols{display:grid;grid-template-columns:1.35fr 1fr;gap:1.2rem;align-items:start}
+@media(max-width:900px){.cols{grid-template-columns:1fr}h1{font-size:1.9rem}}
+#map{height:430px;border-radius:8px;border:1px solid var(--line)}
+.mapnote{font-size:.92rem;color:var(--muted);margin:.5rem 0 0}
+ol.eps{list-style:none;margin:.6rem 0 0;padding:0;max-height:520px;overflow-y:auto}
+.ep{display:block;width:100%;text-align:left;font:inherit;background:#fff;border:1px solid var(--line);border-radius:8px;padding:.55rem .75rem;margin-bottom:.45rem;cursor:pointer;color:var(--ink)}
+.ep:hover{border-color:var(--ink)}
+.ep.on{border-color:var(--sel);box-shadow:0 0 0 2px var(--sel) inset}
+.ep b{font-family:"Space Grotesk",sans-serif;font-weight:500}
+.ep small{display:block;color:var(--muted)}
+.tag{display:inline-block;font-size:.8rem;border:1px solid var(--line);border-radius:99px;padding:0 .5rem;margin-left:.4rem;color:var(--muted)}
+table{border-collapse:collapse;width:100%;max-width:640px;font-size:.98rem}
+th,td{text-align:left;padding:.45rem .6rem;border-bottom:1px solid var(--line)}
+th{font-weight:600}
+ul{margin:.3rem 0 .8rem;padding-left:1.2rem;max-width:70ch}
+li{margin-bottom:.25rem}
+#tip{position:fixed;z-index:3000;pointer-events:none;background:var(--ink);color:#fff;border-radius:6px;padding:.4rem .6rem;font-size:.88rem;line-height:1.4;display:none;max-width:260px}
+#err{background:#fff3e8;border:1px solid var(--sel);border-radius:8px;padding:1rem;margin:1rem 0}
+footer{max-width:1180px;margin:0 auto;padding:0 1.25rem 2.5rem;color:var(--muted);font-size:.92rem}
+</style>
+</head>
+<body>
+<div class="notice" role="note">Hotspots are satellite detections of thermal anomalies, not confirmed fires and not predictions.</div>
+<header>
+<h1>FireHistory Atlas</h1>
+<p id="sub">Past fire activity from NASA’s MODIS and VIIRS satellites, made easier to compare.</p>
+</header>
+<main>
+<div id="err" hidden>Could not load <code>summary.json</code>. Keep <code>index.html</code> and <code>summary.json</code> in the same folder, and open the page through GitHub Pages or a local server, not by double-clicking the file.</div>
+
+<section id="explore">
+<h2>Fire-activity calendar</h2>
+<p>Each square is one day. Darker means more observed detections. Squares with a dark outline are unusually active for that time of year. Click any day to see it on the map.</p>
+<div class="panel">
+<div class="controls">
+<fieldset><legend>Sensor view</legend>
+<label class="opt"><input type="radio" name="view" value="harm" checked> Harmonized</label>
+<label class="opt"><input type="radio" name="view" value="modis"> MODIS only</label>
+<label class="opt"><input type="radio" name="view" value="viirs"> VIIRS only</label></fieldset>
+<fieldset><legend>Measure</legend>
+<label class="opt"><input type="radio" name="metric" value="cells" checked> Fire cell-days</label>
+<label class="opt"><input type="radio" name="metric" value="frp"> Total fire power (FRP)</label></fieldset>
+<fieldset><legend>Year</legend><div class="years" id="years"></div></fieldset>
+</div>
+<div class="scroll"><div id="cal"></div></div>
+<div class="legend" id="legend"></div>
+<div id="detail" aria-live="polite">Click a day in the calendar or an unusual period on the right.</div>
+</div>
+</section>
+
+<section class="cols">
+<div>
+<h2>Map of detections</h2>
+<div class="panel">
+<div id="map" role="region" aria-label="Map of detections"></div>
+<p class="mapnote" id="maplabel"></p>
+</div>
+</div>
+<div>
+<h2>Unusual periods</h2>
+<p>Ranked by strength and length. The score shows how far a day sits above the typical level for the same time of year in the other years. Days scoring 3 or more are flagged.</p>
+<ol class="eps" id="eps"></ol>
+</div>
+</section>
+
+<section id="sensors">
+<h2>Sensor notes</h2>
+<div class="panel">
+<p>MODIS has pixels of about 1 km. VIIRS has pixels of about 375 m, so it notices smaller and cooler fires and reports far more detections for the same landscape. The two sensors also pass over at different times of day. Raw counts therefore cannot be compared directly.</p>
+<h3>Raw detections per year</h3>
+<svg id="raw" viewBox="0 0 560 200" width="100%" role="img" aria-label="Bar chart of raw detections per year for MODIS and VIIRS" style="max-width:640px"></svg>
+<div class="legend"><span class="sw" style="background:var(--modis)"></span> MODIS <span class="sw" style="background:var(--viirs);margin-left:.8rem"></span> VIIRS <span id="rawmax"></span></div>
+<h3>How much higher is VIIRS?</h3>
+<p>Each row shows VIIRS divided by MODIS for every month in the overlap period. The first number is the median. The brackets show the middle half of months.</p>
+<table><thead><tr><th>Measure</th><th>VIIRS ÷ MODIS</th></tr></thead><tbody id="ratios"></tbody></table>
+<h3>How we make the sensors comparable</h3>
+<ul>
+<li>We do not convert pixels from one sensor to the other.</li>
+<li>Fire cell-days count each 0.25° map cell once per day if it has at least one detection. This reduces the effect of pixel size and repeated passes.</li>
+<li>Total fire radiative power (FRP) adds up the heat output in megawatts. A value below 1 in the table means VIIRS reports less total power than MODIS, because each of its small pixels carries less.</li>
+<li>The harmonized view divides each sensor by its own average and then averages the two. A value of 1 is an average day for that sensor.</li>
+</ul>
+<h3>Limits to keep in mind</h3>
+<ul>
+<li>A satellite sees a place only a few times a day. A day with no detection recorded does not mean there was no fire.</li>
+<li>Clouds and thick smoke can hide fires.</li>
+<li>Hotspots can come from burning other than wildfire, such as planned or agricultural burns. We keep only the vegetation-fire type and nominal or high confidence detections.</li>
+<li>The overlap ratios are estimates, not exact conversions.</li>
+<li>This tool shows history only. It does not predict fires and does not replace official alerts.</li>
+</ul>
+<p id="filters" style="color:var(--muted);font-size:.92rem"></p>
+</div>
+</section>
+</main>
+<footer>
+Data: NASA FIRMS, MODIS Collection 6.1 and VIIRS S-NPP active-fire detections (Standard Processing). Map tiles: OpenStreetMap contributors. Built by Galactic Vanguard for the NASA Space Apps Challenge 2026.
+</footer>
+<div id="tip"></div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
+<script>
+const $=s=>document.querySelector(s);
+const RAMP=["#c9d5e8","#98add3","#6283b8","#3a5c96","#1c3560"],EMPTY="#eceee9";
+const MN=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+let D,N,dates=[],idx={},base,map,monthLayer,dayLayer,state={view:"harm",metric:"cells",year:null,date:null};
+const fmt=iso=>new Date(iso+"T00:00:00Z").toLocaleDateString("en-GB",{day:"numeric",month:"short",year:"numeric",timeZone:"UTC"});
+const num=x=>Math.round(x).toLocaleString();
+fetch("summary.json").then(r=>{if(!r.ok)throw 0;return r.json()}).then(init).catch(()=>{$("#err").hidden=false});
+
+function init(d){
+  D=d;const dy=D.daily;N=dy.modis_cells.length;
+  const s=new Date(dy.start+"T00:00:00Z").getTime();
+  for(let i=0;i<N;i++){const t=new Date(s+i*864e5).toISOString().slice(0,10);dates.push(t);idx[t]=i}
+  const mean=a=>a.reduce((x,y)=>x+y,0)/a.length||1;
+  base={cells:[mean(dy.modis_cells),mean(dy.viirs_cells)],frp:[mean(dy.modis_frp),mean(dy.viirs_frp)]};
+  $("#sub").textContent=D.meta.region+", "+fmt(D.meta.start)+" to "+fmt(D.meta.end)+". Past fire activity from NASA’s MODIS and VIIRS satellites, made easier to compare.";
+  $("#filters").textContent="Filters used: "+D.meta.filters+".";
+  const y0=+dates[0].slice(0,4),y1=+dates[N-1].slice(0,4);
+  let yb="";for(let y=y0;y<=y1;y++)yb+=`<button type="button" data-y="${y}">${y}</button>`;
+  $("#years").innerHTML=yb;
+  $("#years").addEventListener("click",e=>{const y=e.target.dataset.y;if(y){state.year=+y;renderYears();drawCal()}});
+  document.querySelectorAll("input[name=view],input[name=metric]").forEach(r=>r.addEventListener("change",()=>{
+    state.view=document.querySelector("input[name=view]:checked").value;
+    state.metric=document.querySelector("input[name=metric]:checked").value;
+    drawCal();drawMap();drawDetail()}));
+  const cal=$("#cal");
+  cal.addEventListener("click",e=>{const i=e.target.dataset.i;if(i!==undefined)select(+i)});
+  cal.addEventListener("mousemove",e=>{const i=e.target.dataset.i,t=$("#tip");
+    if(i===undefined){t.style.display="none";return}
+    t.innerHTML="<b>"+fmt(dates[i])+"</b><br>"+info(+i);t.style.display="block";
+    t.style.left=Math.min(e.clientX+14,innerWidth-270)+"px";t.style.top=(e.clientY+14)+"px"});
+  cal.addEventListener("mouseleave",()=>{$("#tip").style.display="none"});
+  initMap();buildEpisodes();buildSensors();
+  const top=D.episodes[0];
+  state.year=top?+top.peak_date.slice(0,4):y1;
+  select(top?idx[top.peak_date]:N-1);
+}
+
+function arr(s){const c=state.metric==="cells",dy=D.daily;return s==="m"?(c?dy.modis_cells:dy.modis_frp):(c?dy.viirs_cells:dy.viirs_frp)}
+function val(i){const a=arr("m")[i],b=arr("v")[i],bs=base[state.metric];
+  if(state.view==="modis")return a;if(state.view==="viirs")return b;return(a/bs[0]+b/bs[1])/2}
+function scale(){const v=[];for(let i=0;i<N;i++){const x=val(i);if(x>0)v.push(x)}
+  v.sort((a,b)=>a-b);return v[Math.floor(.98*(v.length-1))]||1}
+function color(x,q){if(x<=0)return EMPTY;const t=Math.min(1,Math.sqrt(x/q));return RAMP[Math.min(4,Math.floor(t*5))]}
+function info(i){
+  const dy=D.daily,z=dy.z_combined[i];
+  if(dy.modis_cells[i]===0&&dy.viirs_cells[i]===0)return "No detection recorded";
+  return `MODIS: ${num(dy.modis_cells[i])} cell-days, ${num(dy.modis_frp[i])} MW<br>VIIRS: ${num(dy.viirs_cells[i])} cell-days, ${num(dy.viirs_frp[i])} MW<br>Unusual-day score: ${z.toFixed(1)}${z>=D.meta.anomaly_threshold?" (flagged)":""}`}
+
+function renderYears(){document.querySelectorAll("#years button").forEach(b=>b.setAttribute("aria-pressed",+b.dataset.y===state.year))}
+
+function drawCal(){
+  const Y=state.year,q=scale(),first=Date.UTC(Y,0,1),dow=(new Date(first).getUTCDay()+6)%7;
+  const days=(Date.UTC(Y+1,0,1)-first)/864e5,st=17,L=32,T=20,th=D.meta.anomaly_threshold;
+  let out="",lastM=-1;
+  for(let k=0;k<days;k++){
+    const dt=new Date(first+k*864e5),iso=dt.toISOString().slice(0,10),i=idx[iso];
+    const col=Math.floor((k+dow)/7),row=(k+dow)%7,x=L+col*st,y=T+row*st,m=dt.getUTCMonth();
+    if(m!==lastM){out+=`<text x="${x}" y="12">${MN[m]}</text>`;lastM=m}
+    if(i===undefined)continue;
+    const an=D.daily.z_combined[i]>=th,sel=iso===state.date;
+    const stroke=sel?`stroke="#c2410c" stroke-width="2.6"`:an?`stroke="#17233b" stroke-width="1.6"`:`stroke="none"`;
+    out+=`<rect data-i="${i}" x="${x}" y="${y}" width="14" height="14" rx="2" fill="${color(val(i),q)}" ${stroke}/>`}
+  [["Mon",0],["Wed",2],["Fri",4]].forEach(r=>{out+=`<text x="0" y="${T+r[1]*st+11}">${r[0]}</text>`});
+  $("#cal").innerHTML=`<svg class="cal" width="${L+54*st}" height="${T+7*st+4}" role="img" aria-label="Calendar heatmap for ${Y}">${out}</svg>`;
+  const unit=state.view==="harm"?(state.metric==="cells"?"harmonized index":"harmonized index (FRP)"):(state.metric==="cells"?"fire cell-days per day":"total FRP in MW per day");
+  let lg=`<span class="sw" style="background:${EMPTY}"></span> no detection recorded &nbsp; less`;
+  RAMP.forEach(c=>{lg+=`<span class="sw" style="background:${c}"></span>`});
+  lg+=` more (${unit}, top end ≈ ${state.view==="harm"?q.toFixed(1):num(q)}) &nbsp; <span class="sw" style="border:2px solid #17233b;background:#fff"></span> unusually active for the time of year`;
+  $("#legend").innerHTML=lg}
+
+function select(i){
+  state.date=dates[i];state.year=+dates[i].slice(0,4);
+  renderYears();drawCal();drawMap();drawDetail();
+  document.querySelectorAll(".ep").forEach(b=>b.classList.toggle("on",b.dataset.d===state.date))}
+
+function drawDetail(){const i=idx[state.date];
+  $("#detail").innerHTML=`<b>${fmt(state.date)}</b><br>${info(i)}`}
+
+function initMap(){
+  map=L.map("map");
+  L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:11,attribution:"© OpenStreetMap contributors"}).addTo(map);
+  let a=90,b=-90,c=180,d=-180;
+  Object.values(D.cell_month).forEach(l=>l.forEach(p=>{a=Math.min(a,p[0]);b=Math.max(b,p[0]);c=Math.min(c,p[1]);d=Math.max(d,p[1])}));
+  map.fitBounds([[a-.2,c-.2],[b+.2,d+.2]]);
+  monthLayer=L.layerGroup().addTo(map);dayLayer=L.layerGroup().addTo(map)}
+
+function box(p){return[[p[0]-.125,p[1]-.125],[p[0]+.125,p[1]+.125]]}
+function drawMap(){
+  monthLayer.clearLayers();dayLayer.clearLayers();
+  const mo=state.date.slice(0,7),Y=+mo.slice(0,4),M=+mo.slice(5,7),dim=new Date(Y,M,0).getDate();
+  (D.cell_month[mo]||[]).forEach(p=>{
+    const fm=p[2]/dim,fv=p[3]/dim,f=state.view==="modis"?fm:state.view==="viirs"?fv:(fm+fv)/2;
+    if(f<=0)return;
+    L.rectangle(box(p),{stroke:false,fillColor:"#1c3560",fillOpacity:.15+.75*Math.sqrt(f)})
+      .bindTooltip(`MODIS: ${p[2]} days, VIIRS: ${p[3]} days with a detection in ${MN[M-1]} ${Y}`).addTo(monthLayer)});
+  const dc=D.anomaly_cells[state.date];
+  let txt=`Shading: share of days in ${MN[M-1]} ${Y} with a detection in each 0.25° cell (darker = more days).`;
+  if(dc){
+    dc.forEach(p=>{const col=p[2]&&p[3]?"#17233b":p[2]?"#b45309":"#0f766e";
+      L.rectangle(box(p),{color:col,weight:1.5,fillColor:col,fillOpacity:.35})
+        .bindTooltip(`${fmt(state.date)}: ${p[2]&&p[3]?"seen by both sensors":p[2]?"MODIS only":"VIIRS only"}`).addTo(dayLayer)});
+    txt+=` Outlined cells show detections on ${fmt(state.date)}: dark = both sensors, amber = MODIS only, teal = VIIRS only.`}
+  else txt+=" Choose an unusual period on the right to outline the detections of its peak day.";
+  $("#maplabel").textContent=txt}
+
+function buildEpisodes(){
+  const rng=e=>e.start===e.end?fmt(e.start):fmt(e.start)+" to "+fmt(e.end);
+  $("#eps").innerHTML=D.episodes.map(e=>`<li><button type="button" class="ep" data-d="${e.peak_date}"><b>${rng(e)}</b><span class="tag">${e.both_sensors_agree?"both sensors agree":"one sensor"}</span><small>Peak ${fmt(e.peak_date)}, score ${e.peak_score}. ${e.flagged_days} flagged day${e.flagged_days>1?"s":""}. Peak day: MODIS ${num(e.modis_cells)}, VIIRS ${num(e.viirs_cells)} cell-days.</small></button></li>`).join("");
+  $("#eps").addEventListener("click",ev=>{const b=ev.target.closest(".ep");if(b)select(idx[b.dataset.d])})}
+
+function buildSensors(){
+  const ry=D.raw_by_year,ys=Object.keys(ry.MODIS).sort();
+  const mx=Math.max(...ys.map(y=>Math.max(ry.MODIS[y],ry.VIIRS[y]))),w=520/ys.length;let s="";
+  ys.forEach((y,k)=>{const x=20+k*w,hm=ry.MODIS[y]/mx*150,hv=ry.VIIRS[y]/mx*150;
+    s+=`<rect x="${x+w*.1}" y="${170-hm}" width="${w*.38}" height="${hm}" fill="#b45309"/><rect x="${x+w*.52}" y="${170-hv}" width="${w*.38}" height="${hv}" fill="#0f766e"/><text x="${x+w/2}" y="190" text-anchor="middle" font-size="12" fill="#56606f">${y}</text>`});
+  s+=`<line x1="16" y1="170" x2="548" y2="170" stroke="#d5d9d2"/>`;
+  $("#raw").innerHTML=s;$("#rawmax").textContent="Tallest bar: "+mx.toLocaleString()+" detections.";
+  const r=D.ratio_summary,row=(n,o)=>`<tr><td>${n}</td><td>${o.median.toFixed(2)} (${o.p25.toFixed(2)} to ${o.p75.toFixed(2)})</td></tr>`;
+  $("#ratios").innerHTML=row("Raw detections",r.raw_counts)+row("Fire cell-days",r.cell_days)+row("Total fire power (FRP)",r.frp)}
+</script>
+</body>
+</html>
