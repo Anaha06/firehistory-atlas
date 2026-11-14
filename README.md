@@ -38,9 +38,6 @@ Python, Pandas, Leaflet, d3, HTML/JavaScript
 
 AI tools were used to help plan the project and write parts of the code. [Describe what you changed or wrote yourself.]
 
-## Team
-
-- [Name], [role]
 
 ## License
 
