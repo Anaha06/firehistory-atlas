@@ -4,7 +4,7 @@
 
 NASA Space Apps Challenge 2026 · Challenge: Harmonization of MODIS and VIIRS Hot Spots
 
-🔗 **Live demo:** [your GitHub Pages link]
+🔗 **Live demo:** https://anaha06.github.io/firehistory-atlas/
 
 ## What it does
 
